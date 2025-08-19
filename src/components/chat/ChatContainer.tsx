@@ -1,47 +1,60 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import { Message } from "@/types";
 
+// Simple CSS for dot animation
+const dotAnimation = `
+  @keyframes blink {
+    0% { opacity: 0.2; }
+    20% { opacity: 1; }
+    100% { opacity: 0.2; }
+  }
+  .animate-blink span {
+    animation: blink 1.4s infinite;
+  }
+  .animate-blink span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .animate-blink span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  .dot-lg {
+    font-size: 1.5rem; /* Adjust as needed for larger dots */
+    line-height: 1; /* Helps with vertical alignment of dots */
+  }
+`;
+
 interface ChatContainerProps {
   messages: Message[];
   onCopyMessage: (content: string) => void;
+  isLoading: boolean;
 }
 
-// Enhanced MessageBubble wrapper with fade animation
 const AnimatedMessageBubble: React.FC<{
   message: Message;
   onCopy: (content: string) => void;
 }> = ({ message, onCopy }) => {
-  const [isVisible, setIsVisible] = useState(true);
-  const messageRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = React.useState(true);
+  const messageRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Calculate opacity based on intersection ratio
         const ratio = entry.intersectionRatio;
-        if (ratio > 0.1) {
-          setIsVisible(true);
-        } else {
-          setIsVisible(false);
-        }
+        setIsVisible(ratio > 0.1);
       },
       {
         threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
-        rootMargin: "-10px 0px -10px 0px", // Start fading slightly before element leaves viewport
+        rootMargin: "-10px 0px -10px 0px",
       }
     );
 
-    if (messageRef.current) {
-      observer.observe(messageRef.current);
-    }
-
+    const cur = messageRef.current;
+    if (cur) observer.observe(cur);
     return () => {
-      if (messageRef.current) {
-        observer.unobserve(messageRef.current);
-      }
+      if (cur) observer.unobserve(cur);
     };
   }, []);
 
@@ -57,19 +70,15 @@ const AnimatedMessageBubble: React.FC<{
   );
 };
 
-interface ChatContainerProps {
-  messages: Message[];
-  onCopyMessage: (content: string) => void;
-}
-
 export const ChatContainer: React.FC<ChatContainerProps> = ({
   messages,
   onCopyMessage,
+  isLoading,
 }) => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Corrected type
 
-  // Auto-scroll to bottom when new messages are added
+  // Auto-scroll to bottom when new messages are added or loading state changes
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({
@@ -77,13 +86,37 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         block: "end",
       });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
+
+  const showWelcomeMessage = messages.length === 0 && !isLoading;
 
   return (
     <div className="flex-1 w-full overflow-hidden pt-4">
+      <style>{dotAnimation}</style>
       <div className="max-w-4xl mx-auto h-full">
         <ScrollArea className="h-full" ref={scrollAreaRef}>
           <div className="py-8 px-6 pt-12">
+            {/* Conditional Welcome Message */}
+            {showWelcomeMessage && (
+              <div className="flex flex-col items-center justify-center text-center h-full px-4 text-gray-600">
+                <h2 className="text-2xl font-bold mb-2">
+                  Welcome to KnowThyself!
+                </h2>
+                <p className="text-lg">
+                  I'm here to help you understand Large Language Models.
+                </p>
+                <p className="text-sm mt-2">
+                  Ask me anything about LLMs, their architecture, or how they
+                  work.
+                </p>
+                <p className="text-sm mt-1">
+                  You can also use the tools on the left sidebar to explore
+                  model behaviors!
+                </p>
+              </div>
+            )}
+
+            {/* Render actual chat messages if available */}
             {messages.map((message) => (
               <AnimatedMessageBubble
                 key={message.id}
@@ -91,7 +124,28 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 onCopy={onCopyMessage}
               />
             ))}
-            {/* Invisible element to scroll to */}
+
+            {/* Conditional Loading Animation */}
+            {isLoading && (
+              <div className="flex justify-start mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0">
+                    {/* Assistant Avatar */}
+                    <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
+                      AI
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {/* Dots as the message content, no background */}
+                    <div className="text-gray-800 dot-lg animate-blink">
+                      <span>.</span>
+                      <span>.</span>
+                      <span>.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>

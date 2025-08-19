@@ -8,7 +8,8 @@ interface ChatInputProps {
   inputValue: string;
   setInputValue: (value: string) => void;
   onSendMessage: () => void;
-  onKeyPress: (e: React.KeyboardEvent) => void;
+  onKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void; // Corrected type
+  isLoading: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -16,6 +17,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   setInputValue,
   onSendMessage,
   onKeyPress,
+  isLoading,
 }) => {
   return (
     <div className="w-full px-2 sm:px-4 md:px-6 pb-6">
@@ -26,6 +28,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               variant="ghost"
               size="icon"
               className="shrink-0 h-8 w-8 text-gray-600 hover:bg-gray-100"
+              disabled={isLoading} // Disable while loading
             >
               <PlusIcon className="h-4 w-4" />
             </Button>
@@ -36,6 +39,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onKeyPress={onKeyPress}
                 placeholder="Ask anything"
                 className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base text-gray-900"
+                disabled={isLoading} // Disable input field while loading
               />
             </div>
             <div className="flex gap-1">
@@ -43,6 +47,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-gray-600 hover:bg-gray-100"
+                disabled={isLoading} // Disable while loading
               >
                 <ImageIcon className="h-4 w-4" />
               </Button>
@@ -50,12 +55,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-gray-600 hover:bg-gray-100"
+                disabled={isLoading} // Disable while loading
               >
                 <MicIcon className="h-4 w-4" />
               </Button>
               <Button
                 onClick={onSendMessage}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || isLoading}
                 size="icon"
                 className="h-8 w-8 bg-black text-white hover:bg-gray-800"
               >

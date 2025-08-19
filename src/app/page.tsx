@@ -17,6 +17,7 @@ export default function ChatPage() {
     handleSendMessage,
     handleKeyPress,
     handleCopyMessage,
+    isLoading, // Make sure to destructure isLoading from useChatLogic
   } = useChatLogic();
 
   return (
@@ -34,13 +35,19 @@ export default function ChatPage() {
         </div>
         <div className="h-0 shrink-0"></div>
         {/* ChatContainer: This component will fill the remaining vertical space */}
-        <ChatContainer messages={messages} onCopyMessage={handleCopyMessage} />
+        <ChatContainer
+          messages={messages}
+          onCopyMessage={handleCopyMessage}
+          isLoading={isLoading}
+        />{" "}
+        {/* Pass isLoading */}
         {/* ChatInput: Should have fixed height and not shrink */}
         <ChatInput
           inputValue={inputValue}
           setInputValue={setInputValue}
           onSendMessage={handleSendMessage}
           onKeyPress={handleKeyPress}
+          isLoading={isLoading} // Pass the isLoading state to ChatInput
         />
       </div>
     </MainLayout>

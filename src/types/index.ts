@@ -3,6 +3,26 @@ export interface Message {
   content: string;
   sender: "user" | "assistant";
   timestamp: Date;
+  additional_kwargs?: {
+    token?: string[];
+    attention?: number[][];
+  };
+
+  // additional_kwargs?: Partial<AttentionData>; // Use Partial since these are optional
+}
+
+// export interface CircuitsVisVisualizerProps {
+//   additionalKwargs: {
+//     token: string[];
+//     attention: number[];
+//   };
+// }
+
+export interface AttentionData {
+  token: string[];
+  attention: number[][]; // A 2D array of numbers for the attention matrix
+  // bert_attention: number[][][]; // A 3D array for layer/head-specific attention
+  // is_type_attention: boolean;
 }
 
 export interface Tool {
