@@ -84,16 +84,9 @@ export const DOCUMENTATION: Documentation[] = [
 ];
 
 export const RECENT_CHATS: string[] = [
-  "Tailwind CSS Installation",
-  "Next.js Repo Naming Guide",
-  "Display HTML in Gradio",
-  "TB IGRA Test Interpretation",
-  "Verocell Vaccine Documentation",
-  "Expose LangGraph Dev Network",
-  "LaTeX Table Creation",
-  "Amazon Linux pnpm setup",
-  "Vercel deployment issue",
-  "LangGraph FastAPI Backend",
+  "What is interpretable AI?",
+  "What is global interpretation?",
+  '{"tool":"llm_visualization","model":"gpt2","layer":"1","head":"1","text":"The quick brown fox."}',
 ];
 
 export const TABS = ["home", "documentation", "tools", "workflows", "settings"];

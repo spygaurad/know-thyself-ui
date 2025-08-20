@@ -138,7 +138,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               ${
                 isUser
                   ? "bg-gray-700 text-white" // Darker blue for user
-                  : "bg-gray-700 text-gray-100" // Dark grey for assistant
+                  : "bg-stone-200 text-neutral-950" // Dark grey for assistant
               }
             `}
           >

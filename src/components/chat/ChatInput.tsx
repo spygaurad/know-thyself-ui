@@ -2,7 +2,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ImageIcon, SendIcon, PlusIcon, MicIcon } from "lucide-react";
+import { SendIcon } from "lucide-react";
 
 interface ChatInputProps {
   inputValue: string;
@@ -24,14 +24,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <div className="mx-auto w-full max-w-2xl">
         <div className="relative">
           <div className="flex items-end gap-2 bg-white border border-gray-300 rounded-xl p-3 shadow-sm">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 h-8 w-8 text-gray-600 hover:bg-gray-100"
-              disabled={isLoading} // Disable while loading
-            >
-              <PlusIcon className="h-4 w-4" />
-            </Button>
             <div className="flex-1">
               <Input
                 value={inputValue}
@@ -43,22 +35,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               />
             </div>
             <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-600 hover:bg-gray-100"
-                disabled={isLoading} // Disable while loading
-              >
-                <ImageIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-600 hover:bg-gray-100"
-                disabled={isLoading} // Disable while loading
-              >
-                <MicIcon className="h-4 w-4" />
-              </Button>
               <Button
                 onClick={onSendMessage}
                 disabled={!inputValue.trim() || isLoading}

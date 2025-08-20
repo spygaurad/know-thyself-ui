@@ -21,7 +21,7 @@ const dotAnimation = `
     animation-delay: 0.4s;
   }
   .dot-lg {
-    font-size: 1.5rem; /* Adjust as needed for larger dots */
+    font-size: 2.8rem; /* Adjust as needed for larger dots */
     line-height: 1; /* Helps with vertical alignment of dots */
   }
 `;
@@ -103,7 +103,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   Welcome to KnowThyself!
                 </h2>
                 <p className="text-lg">
-                  I'm here to help you understand Large Language Models.
+                  I`m here to help you understand Large Language Models.
                 </p>
                 <p className="text-sm mt-2">
                   Ask me anything about LLMs, their architecture, or how they

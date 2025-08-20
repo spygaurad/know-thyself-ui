@@ -1,4 +1,4 @@
-// useChatLogic.ts
+"use client";
 import { useState, KeyboardEvent } from "react";
 import { Message } from "@/types";
 import { v4 as uuidv4 } from "uuid";
@@ -75,33 +75,40 @@ function isServerEvent(obj: unknown): obj is ServerEvent {
 export const useChatLogic = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [activeTab, setActiveTab] = useState("chat");
+  // CHANGED: Set the initial state of activeTab to "home"
+  const [activeTab, setActiveTab] = useState("home");
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleSendMessage = async () => {
-    if (inputValue.trim() === "") return;
+  // handleSendMessage now accepts an optional message content to bypass inputValue
+  const handleSendMessage = async (messageOverride?: string) => {
+    const inputToSend =
+      messageOverride !== undefined ? messageOverride : inputValue;
 
-    // Immediately display the user's message
+    if (inputToSend.trim() === "") return; // Use the determined content for the check
+
+    // Clear the input field if it was used (not overridden)
+    if (messageOverride === undefined) {
+      setInputValue("");
+    }
+    setIsLoading(true); // Indicate loading state
+
+    // Add the user message to the local state so it appears immediately in the UI
     const userMessage: Message = {
       id: uuidv4(),
-      content: inputValue,
+      content: inputToSend, // Use the determined content here
       sender: "user",
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
 
-    const currentInput = inputValue;
-    setInputValue("");
-    setIsLoading(true); // Set loading to true here
-
-    let jsonBuffer = "";
+    let jsonBuffer = ""; // Buffer for accumulating partial JSON strings
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: currentInput, threadId }),
+        body: JSON.stringify({ message: inputToSend, threadId }), // Use the determined content for the API call
       });
 
       if (!response.body) throw new Error("Response has no body");
@@ -152,7 +159,6 @@ export const useChatLogic = () => {
 
             if (msgs.length === 0) continue;
 
-            // Always replace the entire messages state with the backend's complete history
             const clientMessages = msgs.map(mapBackendToClient);
             console.log(
               "Updating messages state with full backend history:",
@@ -174,15 +180,26 @@ export const useChatLogic = () => {
         },
       ]);
     } finally {
-      setIsLoading(false); // Always reset loading state when the request finishes
+      setIsLoading(false);
     }
+  };
+
+  // Function to programmatically send a message (e.g., from sidebar clicks)
+  const sendPresetMessage = (messageContent: string) => {
+    if (isLoading) {
+      console.log("Cannot send preset message: already loading.");
+      return;
+    }
+    // Set the input value for visual feedback, but then pass it directly to handleSendMessage
+    setInputValue(messageContent);
+    handleSendMessage(messageContent); // Pass the content directly
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
     // Only allow sending if not loading
     if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
-      handleSendMessage();
+      handleSendMessage(); // Call without override, will use inputValue
     }
   };
 
@@ -198,9 +215,10 @@ export const useChatLogic = () => {
     setInputValue,
     activeTab,
     setActiveTab,
-    handleSendMessage,
+    handleSendMessage, // This now accepts an optional override
     handleKeyPress,
     handleCopyMessage,
-    isLoading, // Export isLoading state
+    isLoading,
+    sendPresetMessage,
   };
 };
