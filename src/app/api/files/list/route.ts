@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PYTHON_BACKEND_URL =
-  process.env.PYTHON_BACKEND_URL || "http://localhost:2024";
+const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_LANGGRAPH_BASE_URL;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

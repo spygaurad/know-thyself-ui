@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PYTHON_BACKEND_URL =
-  process.env.PYTHON_BACKEND_URL || "http://localhost:2024";
+const PYTHON_BACKEND_URL = process.env.NEXT_PUBLIC_LANGGRAPH_BASE_URL;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -40,7 +39,7 @@ export async function GET(req: NextRequest) {
           errorMessage = errorData;
         }
       } catch (_jsonParseError: unknown) {
-        console.log(_jsonParseError)
+        console.log(_jsonParseError);
         // Corrected: use _jsonParseError
         // The errorText was not JSON, use it as is or default message
       }

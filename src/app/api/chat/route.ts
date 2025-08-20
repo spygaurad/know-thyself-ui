@@ -1,8 +1,7 @@
 import { Client } from "@langchain/langgraph-sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-const LANGGRAPH_API_URL = "http://localhost:2024";
-
+const LANGGRAPH_API_URL = process.env.NEXT_PUBLIC_LANGGRAPH_BASE_URL;
 export async function POST(req: NextRequest) {
   console.log("\n--- CHAT API ROUTE TRIGGERED ---");
 
