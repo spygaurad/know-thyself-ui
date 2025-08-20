@@ -3,7 +3,7 @@ import { useState, KeyboardEvent } from "react";
 import { Message } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 
-// ---- Backend wire types (no `any`) ----
+// ---- Backend wire types ----
 interface BackendMessage {
   id?: string | number;
   type: "ai" | "assistant" | "human" | "user" | "system";
@@ -26,6 +26,13 @@ interface ValuesEvent {
 }
 
 type ServerEvent = ThreadIdEvent | ValuesEvent;
+
+// ---- Type for the specific settings update payload (for type guarding if needed elsewhere, but not strictly for display) ----
+interface SettingsUpdatePayload {
+  update_model: "true";
+  orchestrator_model: string;
+  user_model: string;
+}
 
 // ---- Helpers ----
 function extractText(content: BackendMessage["content"]): string {
@@ -70,45 +77,69 @@ function isServerEvent(obj: unknown): obj is ServerEvent {
   return !!data && Array.isArray(data.messages);
 }
 
+// Type guard for the settings update payload (kept for good practice, though less critical for this display logic)
+function isSettingsUpdatePayload(obj: unknown): obj is SettingsUpdatePayload {
+  if (typeof obj !== "object" || obj === null) {
+    return false;
+  }
+  const castObj = obj as Record<string, unknown>;
+  return (
+    castObj.update_model === "true" &&
+    typeof castObj.orchestrator_model === "string" &&
+    typeof castObj.user_model === "string"
+  );
+}
+
 // ---------------------------------------
 
 export const useChatLogic = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  // CHANGED: Set the initial state of activeTab to "home"
   const [activeTab, setActiveTab] = useState("home");
   const [threadId, setThreadId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // handleSendMessage now accepts an optional message content to bypass inputValue
   const handleSendMessage = async (messageOverride?: string) => {
     const inputToSend =
       messageOverride !== undefined ? messageOverride : inputValue;
 
-    if (inputToSend.trim() === "") return; // Use the determined content for the check
+    if (inputToSend.trim() === "") return;
 
-    // Clear the input field if it was used (not overridden)
+    // Clear the input field immediately
     if (messageOverride === undefined) {
       setInputValue("");
     }
-    setIsLoading(true); // Indicate loading state
 
-    // Add the user message to the local state so it appears immediately in the UI
+    // Always add the user's message to the local state so it appears immediately
     const userMessage: Message = {
       id: uuidv4(),
-      content: inputToSend, // Use the determined content here
+      content: inputToSend, // This will be the JSON string for settings updates
       sender: "user",
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
 
-    let jsonBuffer = ""; // Buffer for accumulating partial JSON strings
+    setIsLoading(true);
+
+    let jsonBuffer = "";
+    let isSettingsUpdate = false; // We'll detect this to add a custom success/error message if backend doesn't send 'values'
+    let receivedAnyValuesEvent = false; // Track if backend sent a 'values' event
+
+    try {
+      const parsedInput: unknown = JSON.parse(inputToSend);
+      if (isSettingsUpdatePayload(parsedInput)) {
+        isSettingsUpdate = true;
+      }
+    } catch (e) {
+      console.log(e);
+      // Input is not JSON, or not the specific settings JSON. Treat as normal.
+    }
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: inputToSend, threadId }), // Use the determined content for the API call
+        body: JSON.stringify({ message: inputToSend, threadId }),
       });
 
       if (!response.body) throw new Error("Response has no body");
@@ -136,70 +167,94 @@ export const useChatLogic = () => {
           if (!completeLine.startsWith("data: ")) continue;
 
           const jsonString = completeLine.substring(6);
-          let parsedUnknown: unknown;
+          let parsedUnknownEvent: unknown;
           try {
-            parsedUnknown = JSON.parse(jsonString);
-            console.log("Successfully parsed:", parsedUnknown);
+            parsedUnknownEvent = JSON.parse(jsonString);
+            console.log("Successfully parsed:", parsedUnknownEvent);
           } catch (e) {
             console.error("Failed to parse stream data:", jsonString, e);
             continue;
           }
 
-          if (!isServerEvent(parsedUnknown)) {
-            console.warn("Received non-server event:", parsedUnknown);
+          if (!isServerEvent(parsedUnknownEvent)) {
+            console.warn("Received non-server event:", parsedUnknownEvent);
             continue;
           }
 
-          if (parsedUnknown.event === "thread_id" && !threadId) {
-            setThreadId(parsedUnknown.data.thread_id);
+          if (parsedUnknownEvent.event === "thread_id" && !threadId) {
+            setThreadId(parsedUnknownEvent.data.thread_id);
           }
 
-          if (parsedUnknown.event === "values") {
-            const msgs = parsedUnknown.data.messages;
+          if (parsedUnknownEvent.event === "values") {
+            receivedAnyValuesEvent = true; // Mark that we received a 'values' event
+            const msgs = parsedUnknownEvent.data.messages;
 
             if (msgs.length === 0) continue;
 
             const clientMessages = msgs.map(mapBackendToClient);
-            console.log(
-              "Updating messages state with full backend history:",
-              clientMessages
-            );
+            // This setMessages will update the entire chat history, including any previous messages
             setMessages(clientMessages);
           }
         }
       }
+
+      // After stream ends:
+      // If it was a settings update AND the backend did NOT send any 'values' event (meaning
+      // it didn't provide a chat response itself), we'll add a success message.
+      if (isSettingsUpdate && !receivedAnyValuesEvent) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            id: uuidv4(),
+            content: "Settings updated successfully!",
+            sender: "assistant",
+            timestamp: new Date(),
+          },
+        ]);
+      }
     } catch (error) {
       console.error("Failed to send message:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uuidv4(),
-          content: "An error occurred while processing your request.",
-          sender: "assistant",
-          timestamp: new Date(),
-        },
-      ]);
+      // If it was a settings update and there was an error, add an error message
+      if (isSettingsUpdate) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            id: uuidv4(),
+            content: "Failed to save settings. An error occurred.",
+            sender: "assistant",
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        // For other types of messages, add a general error
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uuidv4(),
+            content: "An error occurred while processing your request.",
+            sender: "assistant",
+            timestamp: new Date(),
+          },
+        ]);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function to programmatically send a message (e.g., from sidebar clicks)
   const sendPresetMessage = (messageContent: string) => {
     if (isLoading) {
       console.log("Cannot send preset message: already loading.");
       return;
     }
-    // Set the input value for visual feedback, but then pass it directly to handleSendMessage
-    setInputValue(messageContent);
+    setInputValue(messageContent); // Set input value for immediate visual feedback
     handleSendMessage(messageContent); // Pass the content directly
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Only allow sending if not loading
     if (e.key === "Enter" && !e.shiftKey && !isLoading) {
       e.preventDefault();
-      handleSendMessage(); // Call without override, will use inputValue
+      handleSendMessage();
     }
   };
 
@@ -215,7 +270,7 @@ export const useChatLogic = () => {
     setInputValue,
     activeTab,
     setActiveTab,
-    handleSendMessage, // This now accepts an optional override
+    handleSendMessage,
     handleKeyPress,
     handleCopyMessage,
     isLoading,

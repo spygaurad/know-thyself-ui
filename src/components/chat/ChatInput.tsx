@@ -36,7 +36,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </div>
             <div className="flex gap-1">
               <Button
-                onClick={onSendMessage}
+                onClick={() => onSendMessage()} // FIX: Wrap in an arrow function
                 disabled={!inputValue.trim() || isLoading}
                 size="icon"
                 className="h-8 w-8 bg-black text-white hover:bg-gray-800"
