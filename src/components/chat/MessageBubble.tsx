@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react"; // Import useEffect
+import React, { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CopyIcon, EyeIcon } from "lucide-react";
@@ -16,7 +16,8 @@ interface MessageBubbleProps {
 
 type ActiveView =
   | { type: "token"; data: { tokens: string[] } }
-  | { type: "attention"; data: { tokens: string[]; attention: number[][] } };
+  | { type: "attention"; data: { tokens: string[]; attention: number[][] } }
+  | { type: "bert_viz_view"; data: { filename: string } };
 
 // Simple bold parsing for **text**
 const renderContent = (content: string) => {
@@ -35,28 +36,30 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onCopy,
 }) => {
   const [activeView, setActiveView] = useState<ActiveView | null>(null);
-  const [copied, setCopied] = useState(false); // New state for copy status
+  const [copied, setCopied] = useState(false);
 
   const isUser = message.sender === "user";
+
   const tokens = message.additional_kwargs?.token;
   const attention = message.additional_kwargs?.attention;
+
+  // Pull the HTML filename if present (backend sends it when available)
+  const modelViewFilename = (
+    message as unknown as { additional_kwargs?: { bert_viz_view?: string } }
+  )?.additional_kwargs?.bert_viz_view;
 
   const hasTokenData = Array.isArray(tokens) && tokens.length > 0;
   const hasAttentionData =
     hasTokenData && Array.isArray(attention) && attention.length > 0;
 
-  // Handle copy action and set "Copied" state
+  // Critically: we don't require tokens/attention for model view
+  const hasModelViewData =
+    typeof modelViewFilename === "string" && modelViewFilename.length > 0;
+
   const handleCopyClick = () => {
-    onCopy(message.content); // Call the parent's copy function
-    setCopied(true); // Set local state to copied
-
-    // Reset "Copied" state after 2 seconds
-    const timer = setTimeout(() => {
-      setCopied(false);
-    }, 2000); // 2000 milliseconds = 2 seconds
-
-    // Cleanup the timer if the component unmounts or state changes before timeout
-    return () => clearTimeout(timer);
+    onCopy(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -88,7 +91,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {isUser ? "You" : "Assistant"}
             </span>
             <span className="text-xs text-gray-500">
-              {/* Formats time to e.g., "4:55 PM" */}
               {message.timestamp.toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -97,48 +99,66 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </span>
           </div>
 
-          {/* Assistant-only tool buttons (remain outside the main text bubble) */}
-          {!isUser && (hasTokenData || hasAttentionData) && (
-            <div className="flex gap-2 mb-2">
-              {hasTokenData && tokens && (
-                <Button
-                  size="sm"
-                  className="h-8 px-3 bg-gray-700 text-white hover:bg-gray-800"
-                  onClick={() =>
-                    setActiveView({ type: "token", data: { tokens } })
-                  }
-                >
-                  <EyeIcon className="h-3 w-3 mr-1.5" />
-                  View Tokens
-                </Button>
-              )}
-              {hasAttentionData && tokens && attention && (
-                <Button
-                  size="sm"
-                  className="h-8 px-3 bg-gray-700 text-white hover:bg-gray-800"
-                  onClick={() =>
-                    setActiveView({
-                      type: "attention",
-                      data: { tokens, attention },
-                    })
-                  }
-                >
-                  <EyeIcon className="h-3 w-3 mr-1.5" />
-                  View Attention
-                </Button>
-              )}
-            </div>
-          )}
+          {/* Assistant-only tool buttons */}
+          {!isUser &&
+            (hasTokenData || hasAttentionData || hasModelViewData) && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {hasTokenData && tokens && (
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 bg-gray-700 text-white hover:bg-gray-800"
+                    onClick={() =>
+                      setActiveView({ type: "token", data: { tokens } })
+                    }
+                  >
+                    <EyeIcon className="h-3 w-3 mr-1.5" />
+                    View Tokens
+                  </Button>
+                )}
+
+                {hasAttentionData && tokens && attention && (
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 bg-gray-700 text-white hover:bg-gray-800"
+                    onClick={() =>
+                      setActiveView({
+                        type: "attention",
+                        data: { tokens, attention },
+                      })
+                    }
+                  >
+                    <EyeIcon className="h-3 w-3 mr-1.5" />
+                    View Attention
+                  </Button>
+                )}
+
+                {hasModelViewData && modelViewFilename && (
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 bg-gray-700 text-white hover:bg-gray-800"
+                    onClick={() =>
+                      setActiveView({
+                        type: "bert_viz_view",
+                        data: { filename: modelViewFilename },
+                      })
+                    }
+                  >
+                    <EyeIcon className="h-3 w-3 mr-1.5" />
+                    Model View
+                  </Button>
+                )}
+              </div>
+            )}
 
           {/* Main Message Content Bubble */}
           <div
             className={`
               p-3 rounded-lg shadow-sm break-words whitespace-pre-wrap leading-relaxed
-              max-w-[80%] sm:max-w-md md:max-w-lg lg:max-w-xl /* Adjust max-width as desired */
+              max-w-[80%] sm:max-w-md md:max-w-lg lg:max-w-xl
               ${
                 isUser
-                  ? "bg-gray-700 text-white" // Darker blue for user
-                  : "bg-stone-200 text-neutral-950" // Dark grey for assistant
+                  ? "bg-gray-700 text-white"
+                  : "bg-stone-200 text-neutral-950"
               }
             `}
           >
@@ -147,16 +167,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           </div>
 
-          {/* Copy Button - Updated to show "Copied" */}
+          {/* Copy Button */}
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
             <Button
               variant="ghost"
               size="sm"
               className="h-8 px-2 text-gray-600 hover:bg-gray-100"
-              onClick={handleCopyClick} // Use the new handler
+              onClick={handleCopyClick}
             >
               <CopyIcon className="h-3 w-3 mr-1" />
-              {copied ? "Copied!" : "Copy"} {/* Conditional text rendering */}
+              {copied ? "Copied!" : "Copy"}
             </Button>
           </div>
         </div>
@@ -171,20 +191,43 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
       </div>
 
+      {/* Popup */}
       {activeView && (
         <DataViewPopup
           title={
-            activeView.type === "token" ? "Token View" : "Attention Matrix View"
+            activeView.type === "token"
+              ? "Token View"
+              : activeView.type === "attention"
+              ? "Attention Matrix View"
+              : "Model View"
           }
           onClose={() => setActiveView(null)}
         >
-          {activeView.type === "token" ? (
-            <TokenListView tokens={activeView.data.tokens} />
-          ) : (
-            <AttentionGridView
-              tokens={activeView.data.tokens}
-              attention={activeView.data.attention}
-            />
+          {activeView.type === "token" && (
+            <div className="overflow-auto max-h-[70vh] p-1 scrollbar-custom">
+              <TokenListView tokens={activeView.data.tokens} />
+            </div>
+          )}
+
+          {activeView.type === "attention" && (
+            <div className="overflow-auto max-h-[70vh] p-1 scrollbar-custom">
+              <AttentionGridView
+                tokens={activeView.data.tokens}
+                attention={activeView.data.attention}
+              />
+            </div>
+          )}
+
+          {activeView.type === "bert_viz_view" && (
+            <div className="w-full h-[70vh]">
+              <iframe
+                title="BERT Visualization"
+                src={`/api/files/results?filename=${encodeURIComponent(
+                  activeView.data.filename
+                )}`}
+                className="w-full h-full origin-top-left"
+              />
+            </div>
           )}
         </DataViewPopup>
       )}

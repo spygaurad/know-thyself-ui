@@ -84,9 +84,10 @@ export const DOCUMENTATION: Documentation[] = [
 ];
 
 export const RECENT_CHATS: string[] = [
-  "What is interpretable AI?",
-  "What is global interpretation?",
-  '{"tool":"llm_visualization","model":"gpt2","layer":"1","head":"1","text":"The quick brown fox."}',
+  "Can you give me the attention map for a short example sentence that contains word 'meteor' in it? in layer 10?",
+  "Can you analyse the hate/abusive scores for my model and interpret them?",
+  '"I am going to London next week". Provide visualization for this.',
+  "What are the different approaches to interpretable AI? ",
 ];
 
-export const TABS = ["home", "documentation", "tools", "workflows", "settings"];
+export const TABS = ["home", "documentation", "settings"];

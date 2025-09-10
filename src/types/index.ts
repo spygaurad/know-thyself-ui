@@ -6,6 +6,7 @@ export interface Message {
   additional_kwargs?: {
     token?: string[];
     attention?: number[][];
+    bert_viz_view?: string;
   };
 
   // additional_kwargs?: Partial<AttentionData>; // Use Partial since these are optional

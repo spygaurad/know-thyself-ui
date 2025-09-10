@@ -12,6 +12,7 @@ interface BackendMessage {
   additional_kwargs?: {
     token?: string[];
     attention?: number[][];
+    bert_viz_view?: string;
   };
 }
 
@@ -51,17 +52,27 @@ function mapBackendToClient(m: BackendMessage): Message {
 
   const ts = m.timestamp ? new Date(m.timestamp) : new Date();
 
+  // build the known shape
+  const baseKw = m.additional_kwargs
+    ? {
+        token: m.additional_kwargs.token,
+        attention: m.additional_kwargs.attention,
+      }
+    : undefined;
+
+  if (m.additional_kwargs?.bert_viz_view) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    baseKw &&
+      ((baseKw as unknown as { bert_viz_view?: string }).bert_viz_view =
+        m.additional_kwargs.bert_viz_view);
+  }
+
   return {
     id: String(m.id ?? uuidv4()),
     content: extractText(m.content),
     sender,
     timestamp: ts,
-    additional_kwargs: m.additional_kwargs
-      ? {
-          token: m.additional_kwargs.token,
-          attention: m.additional_kwargs.attention,
-        }
-      : undefined,
+    additional_kwargs: baseKw,
   };
 }
 
