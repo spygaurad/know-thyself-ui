@@ -31,13 +31,8 @@ const ORCHESTRATOR_OPTIONS = ["gemma3:27b", "llava:34b"];
 const TRANSFORMERLENS_OPTIONS = [
   "gpt2-small",
   "gpt2-medium",
-  "gpt2-large",
-  "gpt2-xl",
-  "distilgpt2",
-  "opt-125m",
-  "llama-7b",
-  "tiny-stories-33M",
-  "qwen-7b",
+  "distilbert/distilgpt2",
+  "mistralai/Mistral-7B-Instruct-v0.1",
 ];
 
 const BERTVIZ_OPTIONS = [
