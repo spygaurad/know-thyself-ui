@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CopyIcon, EyeIcon } from "lucide-react";
@@ -31,6 +31,19 @@ const renderContent = (content: string) => {
   );
 };
 
+function isRectangularMatrix(m: unknown, width?: number): m is number[][] {
+  if (!Array.isArray(m) || m.length === 0) return false;
+  return (m as unknown[]).every(
+    (row) =>
+      Array.isArray(row) &&
+      row.length > 0 &&
+      (width === undefined ? true : row.length === width) &&
+      (row as unknown[]).every(
+        (x) => typeof x === "number" && Number.isFinite(x)
+      )
+  );
+}
+
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onCopy,
@@ -49,8 +62,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   )?.additional_kwargs?.bert_viz_view;
 
   const hasTokenData = Array.isArray(tokens) && tokens.length > 0;
-  const hasAttentionData =
-    hasTokenData && Array.isArray(attention) && attention.length > 0;
+
+  // stricter attention validation: 2D numeric matrix with width matching tokens
+  const hasAttentionData = useMemo(() => {
+    if (!hasTokenData) return false;
+    if (!Array.isArray(attention) || attention.length === 0) return false;
+    return isRectangularMatrix(attention, tokens.length);
+  }, [attention, hasTokenData, tokens]);
 
   // Critically: we don't require tokens/attention for model view
   const hasModelViewData =
@@ -61,6 +79,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // coerce timestamp to Date for safety (in case msg carries a string)
+  const ts: Date =
+    message.timestamp instanceof Date
+      ? message.timestamp
+      : new Date(
+          typeof message.timestamp === "string" ? message.timestamp : ""
+        );
 
   return (
     <>
@@ -91,7 +117,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               {isUser ? "You" : "Assistant"}
             </span>
             <span className="text-xs text-gray-500">
-              {message.timestamp.toLocaleTimeString([], {
+              {ts.toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
                 hour12: true,
@@ -203,14 +229,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           }
           onClose={() => setActiveView(null)}
         >
+          {/* Token View: vertical + horizontal scroll if needed */}
           {activeView.type === "token" && (
-            <div className="overflow-auto max-h-[70vh] p-1 scrollbar-custom">
+            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] p-1 scrollbar-custom">
               <TokenListView tokens={activeView.data.tokens} />
             </div>
           )}
 
+          {/* Attention View: add horizontal scroll container to avoid clipping */}
           {activeView.type === "attention" && (
-            <div className="overflow-auto max-h-[70vh] p-1 scrollbar-custom">
+            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] p-1 scrollbar-custom">
               <AttentionGridView
                 tokens={activeView.data.tokens}
                 attention={activeView.data.attention}
@@ -218,6 +246,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
+          {/* Model View: iframe-friendly container */}
           {activeView.type === "bert_viz_view" && (
             <div className="w-full h-[70vh]">
               <iframe
@@ -225,7 +254,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 src={`/api/files/results?filename=${encodeURIComponent(
                   activeView.data.filename
                 )}`}
-                className="w-full h-full origin-top-left"
+                className="w-full h-full"
+                style={{ border: 0 }}
+                loading="lazy"
+                referrerPolicy="no-referrer"
               />
             </div>
           )}

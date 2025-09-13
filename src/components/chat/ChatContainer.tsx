@@ -103,15 +103,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   Welcome to KnowThyself!
                 </h2>
                 <p className="text-lg">
-                  I`m here to help you understand Large Language Models.
+                  One place to inspect and explain LLM behavior.
                 </p>
                 <p className="text-sm mt-2">
-                  Ask me anything about LLMs, their architecture, or how they
-                  work.
+                  Ask anything about your model; I’ll select a tool, run it, and
+                  return an interactive result with a short, readable
+                  explanation.
                 </p>
                 <p className="text-sm mt-1">
-                  You can also use the tools on the left sidebar to explore
-                  model behaviors!
+                  Explore the sidebar to learn what each tool does.
                 </p>
               </div>
             )}

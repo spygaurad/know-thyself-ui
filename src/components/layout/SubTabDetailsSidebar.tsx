@@ -14,19 +14,73 @@ interface SubTabDetailsSidebarProps {
 }
 
 type FolderKey = "documentation" | "tools" | "workflows";
-
 const SECTION_FOLDERS: FolderKey[] = ["documentation", "tools", "workflows"];
+
+/* --------------------
+   Model options & defaults
+--------------------- */
+const DEFAULTS = {
+  orchestrator: "gemma3:27b", // Default orchestrator
+  user: "gpt2-small", // Default user model for non-ollama backends
+  bertviz: "microsoft/xtremedistil-l12-h384-uncased", // Default BertViz model
+  biasEvalOllama: "llama2:13b-chat", // Default ollama model for bias eval
+};
+
+const ORCHESTRATOR_OPTIONS = ["gemma3:27b", "llava:34b"];
+
+const TRANSFORMERLENS_OPTIONS = [
+  "gpt2-small",
+  "gpt2-medium",
+  "gpt2-large",
+  "gpt2-xl",
+  "distilgpt2",
+  "opt-125m",
+  "llama-7b",
+  "tiny-stories-33M",
+  "qwen-7b",
+];
+
+const BERTVIZ_OPTIONS = [
+  "microsoft/xtremedistil-l12-h384-uncased",
+  "google-bert/bert-base-uncased",
+  "google-bert/bert-large-uncased",
+  "FacebookAI/xlm-roberta-base",
+  "FacebookAI/roberta-large",
+  "distilbert/distilbert-base-uncased",
+  "distilbert/distilroberta-base",
+];
+
+const OLLAMA_OPTIONS = [
+  "llama2:7b-chat",
+  "llama2:13b-chat",
+  "mistral:7b-instruct",
+  "falcon3:7b",
+];
+
+/** Label helper for “default” tags */
+function labelWithDefaults(opt: string) {
+  if (opt === DEFAULTS.user) return `${opt} (default)`;
+  if (opt === DEFAULTS.bertviz) return `${opt} (default)`;
+  if (opt === DEFAULTS.biasEvalOllama) return `${opt} (bias-eval default)`;
+  return opt;
+}
+
+/** Infer backend from model string (best-effort hint for server) */
+// function backendFor(model: string): "transformerlens" | "bertviz" | "ollama" {
+//   if (TRANSFORMERLENS_OPTIONS.includes(model)) return "transformerlens";
+//   if (BERTVIZ_OPTIONS.includes(model)) return "bertviz";
+//   if (OLLAMA_OPTIONS.includes(model)) return "ollama";
+//   // heuristic fallbacks:
+//   if (model.includes(":")) return "ollama"; // ollama-style
+//   if (model.includes("/")) return "bertviz"; // HF id
+//   return "transformerlens";
+// }
 
 export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
   activeTab,
   onSendPresetMessage,
 }) => {
-  // --- state for single-tab file view (tools/workflows legacy) ---
-  const [filesInActiveFolder, setFilesInActiveFolder] = useState<string[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState<boolean>(false);
-  const [filesError, setFilesError] = useState<string | null>(null);
-
-  // --- state for unified Documentation page ---
+  // --- Unified Documentation page state ---
   const [sectionFiles, setSectionFiles] = useState<Record<FolderKey, string[]>>(
     {
       documentation: [],
@@ -54,79 +108,57 @@ export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
   const [selectedFolderForReader, setSelectedFolderForReader] =
     useState<string>("");
 
-  // settings form
-  const [orchestratorModel, setOrchestratorModel] =
-    useState<string>("gemma3:27b");
-  const [defaultOllamaModel, setDefaultOllamaModel] =
-    useState<string>("gpt2-small");
+  // --- Settings state ---
+  const [orchestratorModel, setOrchestratorModel] = useState<string>(
+    DEFAULTS.orchestrator
+  );
+  const [customOrchestratorModel, setCustomOrchestratorModel] =
+    useState<string>("");
+
+  const [userModel, setUserModel] = useState<string>(DEFAULTS.user);
+  const [customUserModel, setCustomUserModel] = useState<string>("");
 
   // --------------------------
   // fetch helpers
   // --------------------------
   const fetchFolderFiles = async (folder: FolderKey) => {
-    try {
-      const res = await fetch(`/api/files/list?folder=${folder}`);
-      if (!res.ok) {
-        let detail = res.statusText;
-        try {
-          const err = await res.json();
-          if (
-            err &&
-            typeof err === "object" &&
-            "error" in err &&
-            typeof err.error === "string"
-          ) {
-            detail = err.error;
-          }
-        } catch {}
-        throw new Error(
-          `Failed to fetch files: ${detail} (Status: ${res.status})`
-        );
-      }
-      const data = await res.json();
-      if (
-        typeof data === "object" &&
-        data !== null &&
-        "files" in data &&
-        Array.isArray((data as { files: unknown[] }).files) &&
-        (data as { files: unknown[] }).files.every((f) => typeof f === "string")
-      ) {
-        return data.files as string[];
-      }
+    const res = await fetch(`/api/files/list?folder=${folder}`);
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const err = await res.json();
+        if (
+          err &&
+          typeof err === "object" &&
+          "detail" in err &&
+          typeof err.detail === "string"
+        ) {
+          detail = err.detail;
+        }
+      } catch {}
       throw new Error(
-        "Received unexpected or invalid file list format from server."
+        `Failed to fetch files: ${detail} (Status: ${res.status})`
       );
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Unknown error while loading files.";
-      throw new Error(msg);
     }
+    const data = await res.json();
+    if (!data || !Array.isArray(data.files))
+      throw new Error("Invalid files payload.");
+    return data.files as string[];
   };
 
   useEffect(() => {
-    // If Documentation: fetch all three sections in parallel
     if (activeTab === "documentation") {
-      // set loading for each section
-      setSectionLoading({
-        documentation: true,
-        tools: true,
-        workflows: true,
-      });
-      setSectionError({
-        documentation: null,
-        tools: null,
-        workflows: null,
-      });
+      setSectionLoading({ documentation: true, tools: true, workflows: true });
+      setSectionError({ documentation: null, tools: null, workflows: null });
 
-      Promise.allSettled(SECTION_FOLDERS.map((f) => fetchFolderFiles(f)))
-        .then((results) => {
-          const nextFiles = { ...sectionFiles };
-          const nextLoading = {
-            documentation: false,
-            tools: false,
-            workflows: false,
+      Promise.allSettled(SECTION_FOLDERS.map((f) => fetchFolderFiles(f))).then(
+        (results) => {
+          const nextFiles: Record<FolderKey, string[]> = {
+            documentation: [],
+            tools: [],
+            workflows: [],
           };
-          const nextError: Record<FolderKey, string | null> = {
+          const nextErr: Record<FolderKey, string | null> = {
             documentation: null,
             tools: null,
             workflows: null,
@@ -134,64 +166,29 @@ export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
 
           results.forEach((res, idx) => {
             const folder = SECTION_FOLDERS[idx];
-            if (res.status === "fulfilled") {
-              nextFiles[folder] = res.value;
-            } else {
-              nextError[folder] = res.reason?.message ?? "Failed to load.";
-              nextFiles[folder] = [];
-            }
+            if (res.status === "fulfilled") nextFiles[folder] = res.value;
+            else
+              nextErr[folder] =
+                (res as PromiseRejectedResult).reason?.message ??
+                "Failed to load.";
           });
 
           setSectionFiles(nextFiles);
-          setSectionLoading(nextLoading);
-          setSectionError(nextError);
-        })
-        .catch(() => {
-          // safety: if Promise.allSettled somehow rejects
+          setSectionError(nextErr);
           setSectionLoading({
             documentation: false,
             tools: false,
             workflows: false,
           });
-        });
-      return;
+        }
+      );
     }
-
-    // Else: legacy single-folder behavior for tools/workflows
-    const fileServingTabs: FolderKey[] = [
-      "documentation",
-      "workflows",
-      "tools",
-    ];
-    if (
-      fileServingTabs.includes(activeTab as FolderKey) &&
-      activeTab !== "documentation"
-    ) {
-      setLoadingFiles(true);
-      setFilesError(null);
-      setFilesInActiveFolder([]);
-
-      fetchFolderFiles(activeTab as FolderKey)
-        .then((files) => setFilesInActiveFolder(files))
-        .catch((e) => setFilesError(e.message))
-        .finally(() => setLoadingFiles(false));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleFileClick = (fileName: string, folderName: string) => {
     setSelectedFileName(fileName);
     setSelectedFolderForReader(folderName);
     setIsReaderOpen(true);
-  };
-
-  const handleSaveSettings = () => {
-    const settingsPayload = {
-      update_model: "true",
-      orchestrator_model: orchestratorModel,
-      user_model: defaultOllamaModel,
-    };
-    onSendPresetMessage(JSON.stringify(settingsPayload));
   };
 
   // --------------------------
@@ -213,7 +210,6 @@ export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
           <p className="text-sm text-gray-600 pt-1">{blurb}</p>
         </CardHeader>
         <CardContent>
-          {/* State handling */}
           {loading && (
             <p className="text-gray-500 text-sm px-2">Loading files…</p>
           )}
@@ -224,7 +220,6 @@ export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
             </p>
           )}
 
-          {/* File list */}
           <div className="space-y-2">
             {files.map((fileName) => (
               <button
@@ -252,162 +247,185 @@ export const SubTabDetailsSidebar: React.FC<SubTabDetailsSidebarProps> = ({
     );
   };
 
-  const renderHomePage = () => {
-    return (
-      <div className="space-y-6">
-        <div>
-          <p className="text-sm text-gray-700">
-            Welcome! Get started by exploring some example questions or select a
-            tab to browse documentation, tools, and more.
-          </p>
-        </div>
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">
-              Example Use Cases
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {RECENT_CHATS.map((chat, index) => (
-                <button
-                  key={index}
-                  onClick={() => onSendPresetMessage(chat)}
-                  className="w-full text-left p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
-                >
-                  <p className="text-sm text-gray-800 break-words whitespace-normal">
-                    {chat}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  };
-
-  const renderDocumentationPage = () => {
-    return (
-      <div className="space-y-6">
+  const renderHomePage = () => (
+    <div className="space-y-6">
+      <div>
         <p className="text-sm text-gray-700">
-          These are <b>reference materials</b> that the user can interact with
-          to better understand the platform.
+          Welcome! Get started by exploring some example questions or select a
+          tab to browse documentation, tools, and more.
         </p>
-        <SectionBlock
-          folder="tools"
-          title="Tools"
-          blurb="Description and definitions of AI interpretability tools and functions."
-        />
-        <SectionBlock
-          folder="workflows"
-          title="Workflows"
-          blurb="Workflows based on above tools to design this platform"
-        />
-        <SectionBlock
-          folder="documentation"
-          title="Documents"
-          blurb="Relevant papers and guides related to AI interpretability and explainability."
-        />
       </div>
-    );
-  };
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            Example Use Cases
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {RECENT_CHATS.map((chat, index) => (
+              <button
+                key={index}
+                onClick={() => onSendPresetMessage(chat)}
+                className="w-full text-left p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
+              >
+                <p className="text-sm text-gray-800 break-words whitespace-normal">
+                  {chat}
+                </p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-  const renderSingleFolder = (folder: FolderKey) => {
-    const tabDescriptions: Record<FolderKey, string> = {
-      documentation:
-        "Browse documentation files. (Tip: use the Documentation tab to see Docs, Tools, and Workflows together.)",
-      tools:
-        "Explore available tools and utilities for agents, scripts, or helper modules.",
-      workflows:
-        "View predefined workflows that automate or standardize processes.",
-    };
+  const renderDocumentationPage = () => (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-700">
+        These are <b>reference materials</b> that the user can interact with to
+        better understand the platform.
+      </p>
+      <SectionBlock
+        folder="tools"
+        title="Tools"
+        blurb="Description and definitions of AI interpretability tools and functions."
+      />
+      <SectionBlock
+        folder="workflows"
+        title="Workflows"
+        blurb="Workflows based on above tools to design this platform"
+      />
+      <SectionBlock
+        folder="documentation"
+        title="Documents"
+        blurb="Relevant papers and guides related to AI interpretability and explainability."
+      />
+    </div>
+  );
 
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-gray-700">{tabDescriptions[folder]}</p>
-        {loadingFiles && <p className="text-gray-600">Loading files...</p>}
-        {filesError && <p className="text-red-500">Error: {filesError}</p>}
-        {!loadingFiles && filesInActiveFolder.length === 0 && !filesError && (
-          <p className="text-gray-600">No files found in this folder.</p>
-        )}
-        {filesInActiveFolder.map((fileName) => (
-          <Card
-            key={fileName}
-            className="cursor-pointer hover:shadow-md transition-shadow bg-white border border-gray-200"
-            onClick={() => handleFileClick(fileName, folder)}
+  const renderSettings = () => (
+    <div className="space-y-4">
+      <Card className="bg-white border border-gray-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">General Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Orchestrator */}
+          <div>
+            <label className="text-xs font-medium text-gray-700">
+              Orchestrator Model
+            </label>
+            <select
+              className="w-full mt-1 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900"
+              value={orchestratorModel}
+              onChange={(e) => setOrchestratorModel(e.target.value)}
+            >
+              {ORCHESTRATOR_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o === DEFAULTS.orchestrator ? `${o} (default)` : o}
+                </option>
+              ))}
+            </select>
+            <input
+              className="w-full mt-2 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900"
+              placeholder="Custom orchestrator model (optional)…"
+              value={customOrchestratorModel}
+              onChange={(e) => setCustomOrchestratorModel(e.target.value)}
+            />
+          </div>
+
+          {/* User */}
+          <div>
+            <label className="text-xs font-medium text-gray-700">
+              User Model
+            </label>
+            <select
+              className="w-full mt-1 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900"
+              value={userModel}
+              onChange={(e) => setUserModel(e.target.value)}
+            >
+              <optgroup label="TransformerLens">
+                {TRANSFORMERLENS_OPTIONS.map((o) => (
+                  <option key={`tl-${o}`} value={o}>
+                    {labelWithDefaults(o)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="BertViz">
+                {BERTVIZ_OPTIONS.map((o) => (
+                  <option key={`bv-${o}`} value={o}>
+                    {labelWithDefaults(o)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Ollama">
+                {OLLAMA_OPTIONS.map((o) => (
+                  <option key={`ol-${o}`} value={o}>
+                    {labelWithDefaults(o)}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <input
+              className="w-full mt-2 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900"
+              placeholder="Custom user model (optional)…"
+              value={customUserModel}
+              onChange={(e) => setCustomUserModel(e.target.value)}
+            />
+          </div>
+
+          <Button
+            size="sm"
+            className="w-full bg-black text-white hover:bg-gray-800"
+            onClick={() => {
+              const finalUser = customUserModel.trim() || userModel;
+              const finalOrch =
+                customOrchestratorModel.trim() || orchestratorModel;
+
+              const message = `Change orchestrator model: ${finalOrch} and user model: ${finalUser}`;
+
+              onSendPresetMessage(message);
+            }}
           >
-            <CardContent className="p-3">
-              <h3 className="font-medium text-sm text-gray-900">{fileName}</h3>
-              <div className="flex items-center justify-between mt-2">
-                <Badge variant="secondary" className="text-xs">
-                  {fileName.split(".").pop()?.toUpperCase() || "FILE"}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  };
+            Save Settings
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderToolsOrWorkflowsNotice = (tab: "tools" | "workflows") => (
+    <div className="space-y-4">
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">
+            {tab === "tools" ? "Tools" : "Workflows"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-700">
+            This tab now lives inside <b>Documentation</b>. Open the
+            Documentation tab to browse all files from <b>Tools</b>,{" "}
+            <b>Workflows</b>, and <b>Documents</b> in one place.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "home":
         return renderHomePage();
-
       case "documentation":
-        // unified single-page doc: docs + tools + workflows
         return renderDocumentationPage();
-
-      case "tools":
-      case "workflows":
-        return renderSingleFolder(activeTab as FolderKey);
-
       case "settings":
-        return (
-          <div className="space-y-4">
-            <Card className="bg-white border border-gray-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">General Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-700">
-                    Orchestrator Model
-                  </label>
-                  <select
-                    className="w-full mt-1 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900"
-                    value={orchestratorModel}
-                    onChange={(e) => setOrchestratorModel(e.target.value)}
-                  >
-                    <option value="gemma3:27b">gemma3:27b</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700">
-                    Default OLLAMA User Model
-                  </label>
-                  <textarea
-                    className="w-full mt-1 p-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 resize-y"
-                    rows={4}
-                    placeholder="gpt2-small"
-                    value={defaultOllamaModel}
-                    onChange={(e) => setDefaultOllamaModel(e.target.value)}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full bg-black text-white hover:bg-gray-800"
-                  onClick={handleSaveSettings}
-                >
-                  Save Settings
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
+        return renderSettings();
+      case "tools":
+        return renderToolsOrWorkflowsNotice("tools");
+      case "workflows":
+        return renderToolsOrWorkflowsNotice("workflows");
       default:
         return null;
     }
