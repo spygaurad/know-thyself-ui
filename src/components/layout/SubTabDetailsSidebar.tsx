@@ -22,7 +22,7 @@ const SECTION_FOLDERS: FolderKey[] = ["documentation", "tools", "workflows"];
 const DEFAULTS = {
   orchestrator: "gemma3:27b", // Default orchestrator
   user: "gpt2-small", // Default user model for non-ollama backends
-  bertviz: "microsoft/xtremedistil-l12-h384-uncased", // Default BertViz model
+  bertviz: "google-bert/bert-base-uncased", // Default BertViz model
   biasEvalOllama: "llama2:13b-chat", // Default ollama model for bias eval
 };
 
